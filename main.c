@@ -8,12 +8,24 @@
 #define SUBGRID_SIZE 3
 int sudokuBoard[BOARD_SIZE][BOARD_SIZE];
 int valid;
+int option;
+int pipefd[2];
 
 typedef struct
 {
     int row;
     int column;
 } parameters;
+
+void isValid()
+{
+    valid = -1;
+    if (option == 3)
+    {
+        write(pipefd[1], &valid, sizeof(int));
+        exit(0);
+    }
+}
 
 void printBoard()
 {
@@ -42,7 +54,7 @@ void *validateRow(void *param)
         {
             if (seen[sudokuBoard[row][i] - 1] == 1)
             {
-                valid = -1;
+                isValid();
                 pthread_exit(0);
             }
             else
@@ -69,7 +81,7 @@ void *validateColumn(void *param)
         {
             if (seen[sudokuBoard[i][col] - 1] == 1)
             {
-                valid = -1;
+                isValid();
                 pthread_exit(0);
             }
             else
@@ -100,7 +112,8 @@ void *validateSubgrid(void *param)
 
             if (seen[num - 1] == 1)
             {
-                pthread_exit((void *)0);
+                isValid();
+                pthread_exit(0);
             }
             else
             {
@@ -113,8 +126,7 @@ void *validateSubgrid(void *param)
 }
 
 // Function to read the Sudoku board from a file
-void readBoardFromFile(FILE *sudokufile,
-                       int sudokuBoard[BOARD_SIZE][BOARD_SIZE])
+void readBoardFromFile(FILE *sudokufile, int sudokuBoard[BOARD_SIZE][BOARD_SIZE])
 {
     sudokufile = fopen("input.txt", "r");
     for (int i = 0; i < BOARD_SIZE; i++)
@@ -140,7 +152,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: %s <option>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    int option = atoi(argv[1]);
+    option = atoi(argv[1]);
     FILE *fptr;
     readBoardFromFile(fptr, sudokuBoard);
     parameters *checkRows = (parameters *)malloc(sizeof(parameters));
@@ -165,14 +177,12 @@ int main(int argc, char *argv[])
         checkRows->row = 0;
         checkRows->column = 0;
         pthread_create(&threads[1], NULL, validateRow, (void *)checkRows);
-        pthread_join(threads[0], NULL);
-        pthread_join(threads[1], NULL);
 
         for (int threadIndex = 2; threadIndex < 11; threadIndex++)
         {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 7; i+=3)
             {
-                for (int j = 0; j < 3; j++)
+                for (int j = 0; j < 7; j+=3)
                 {
                     check3by3->row = i;
                     check3by3->column = j;
@@ -203,9 +213,9 @@ int main(int argc, char *argv[])
         }
         for (int threadIndex = 18; threadIndex < 27; threadIndex++)
         {
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 7; i+=3)
             {
-                for (int j = 0; j < 3; j++)
+                for (int j = 0; j < 7; j+=3)
                 {
                     check3by3->row = i;
                     check3by3->column = j;
@@ -221,7 +231,13 @@ int main(int argc, char *argv[])
     else if (option == 3)
     {
         // Create 4 processes - parent, row process, column process, subgrid process
+
         pid_t pids[3];
+        if (pipe(pipefd) == -1)
+        {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
         for (int i = 0; i < 3; i++)
         {
             pids[i] = fork();
@@ -272,6 +288,11 @@ int main(int argc, char *argv[])
         {
             waitpid(pids[i], NULL, 0);
         }
+        //parent has to close the write end
+        close(pipefd[1]);
+        read(pipefd[0], &valid, sizeof(int));
+        close(pipefd[0]);
+
     }
 
     clock_t end_time;
