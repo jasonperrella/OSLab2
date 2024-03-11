@@ -7,9 +7,9 @@
 #define BOARD_SIZE 9
 #define SUBGRID_SIZE 3
 int sudokuBoard[BOARD_SIZE][BOARD_SIZE];
-int valid;
-int option;
-int pipefd[2];
+int valid;    /* holds the validity status of the board*/
+int option;    /* holds the option that the user enters*/
+int pipefd[2];  /* pipe used for interprocess communication*/
 
 typedef struct
 {
@@ -17,6 +17,7 @@ typedef struct
     int column;
 } parameters;
 
+/* function used to set the valid variable holding the validity status; if option 3 is selected, then it writes valid to the pipe so that the parent pipe can read it*/
 void isValid()
 {
     valid = -1;
@@ -27,6 +28,7 @@ void isValid()
     }
 }
 
+/* prints the board that is being read in*/
 void printBoard()
 {
     for (int i = 0; i < BOARD_SIZE; i++)
@@ -38,15 +40,15 @@ void printBoard()
         printf("\n");
     }
 }
-// ADD IF VALID = -1 CONDITION TO ALL FUNCTIONS
-// ADD GLOBAL VARIABLE TO TRACK WHICH INDEX THE ERROR IS
 
-// Function to validate a row
+
+/* Function to validate a row ; goes row by row, initializing an array of 9 indices to 0; once a number is seen in that row, it sets that index in the seen array to 1; if, on any iteration
+that board value is seen (seen is 1), then the function returns as there is a duplicate*/
 void *validateRow(void *param)
 {
     parameters *data = (parameters *)param;
     int row = data->row;
-
+    
     while (row < BOARD_SIZE)
     {
         int seen[9] = {0};
@@ -68,7 +70,7 @@ void *validateRow(void *param)
     pthread_exit(0);
 }
 
-// Function to validate a column
+/* Function to validate a column ; follows the same method as validateRow */
 void *validateColumn(void *param)
 {
     parameters *data = (parameters *)param;
@@ -95,7 +97,7 @@ void *validateColumn(void *param)
     pthread_exit(0);
 }
 
-// Function to validate a subgrid
+/* Function to validate a subgrid; follows the same methods as validateRow and validateColumn */
 void *validateSubgrid(void *param)
 {
     parameters *data = (parameters *)param;
@@ -288,13 +290,14 @@ int main(int argc, char *argv[])
         {
             waitpid(pids[i], NULL, 0);
         }
-        //parent has to close the write end
+        //parent has to close the write end or else deadlock occurs
         close(pipefd[1]);
         read(pipefd[0], &valid, sizeof(int));
         close(pipefd[0]);
 
     }
 
+    /* checks the value of valid and outputs accordingly along with the time taken to execute */
     clock_t end_time;
     double time_taken;
     if (valid == -1)
